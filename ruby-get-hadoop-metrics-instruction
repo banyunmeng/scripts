@@ -1,6 +1,6 @@
 
 
-Environment Setup
+Environment Setup (CentOS5)
 -----
 curl -L get.rvm.io | bash -s stable
 source /etc/profile.d/rvm.sh
