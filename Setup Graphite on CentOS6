@@ -1,0 +1,77 @@
+wget "http://launchpad.net/graphite/1.9/0.9.9/+download/whisper-0.9.9.tar.gz"
+wget "http://launchpad.net/graphite/0.9/0.9.9/+download/carbon-0.9.9.tar.gz"
+wget "http://launchpad.net/graphite/0.9/0.9.9/+download/graphite-web-0.9.9.tar.gz"
+tar zxvf whisper*
+tar zxvf carbon*
+tar zxvf graphite*
+# Carbon
+pushd carbon-0.9.9
+sudo python ./setup.py install
+popd
+
+# Whisper
+pushd whisper-0.9.9
+sudo python ./setup.py install
+popd
+
+yum update
+yum install python-ldap.x86_64
+yum install python-django-tagging.noarch
+yum install python-txamqp.noarch
+yum install python-twisted.noarch
+
+python check-dependencies.py
+#should have thses sentences:
+#All necessary dependencies are met.
+#All optional dependencies are met.
+
+sudo python graphite-web-0.9.9/setup.py install
+
+# Perform these AS ROOT
+chown -R apache:apache /opt/graphite/storage/
+cp /opt/graphite/webapp/graphite/local_settings.py.example \
+/opt/graphite/webapp/graphite/local_settings.py
+-------------------------------------------------------------
+vi /opt/graphite/webapp/graphite/settings.py
+#set correct for database
+#TEMPLATE_LOADERS = (
+   'django.template.loaders.filesystem.Loader',
+   'django.template.loaders.app_directories.Loader',
+#  'django.template.loaders.filesystem.load_template_source',
+#  'django.template.loaders.app_directories.load_template_source',
+)
+DATABASE_NAME = 'test1' # Or path to database file if using sqlite3.
+DATABASE_USER = 'root'                          # Not used with sqlite3.
+DATABASE_PASSWORD = ''                          # Not used with sqlite3.
+DATABASE_HOST = ''                              # Set to empty string for localhost. Not used with sqlite3.
+DATABASE_PORT = '5432'                          # Set to empty string for default. Not used with sqlite3.
+
+DATABASES = {
+  'default': {
+        'ENGINE':'django.db.backends.postgresql_psycopg2',
+        'NAME': DATABASE_NAME,
+        'USER': DATABASE_USER,
+        'PASSWORD': DATABASE_PASSWORD,
+        'HOST': 'localhost',
+        'PORT': DATABASE_PORT,
+  },
+}
+------------------------------------------------------
+
+/opt/graphite/bin/run-graphite-devel-server.py /opt/graphite/
+/opt/graphite/bin/carbon-cache.py start
+#config //etc/httpd/conf.d/graphite-web.conf
+service httpd start
+# go to http://localhost:8080
+
+========================================================
+#software to convert from rrd to wsp whisper
+git clone https://github.com/graphite-project/whisper.git
+bin/rrd2whisper.py rrdpath
+#note: may need to yum install rrd-python
+move the converted wsp to /opt/graphite/storage/whisper...
+=======================================================
+
+
+
+
