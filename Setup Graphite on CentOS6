@@ -1,45 +1,106 @@
+#Note: OS environment is CentOS6
+#prerequesties: svn, httpd, python 
+# user graphite group graphite
+#hiearchy:  ~/graphite/external/graphite/upstream/graphite-web-0.9.9(.tar.gz)
+#                              /whisper/upstream/whisper-0.9.9(.tar.gz)
+#                              /carbon/upstream/carbon-0.9.9(.tar.gz)
+#                              /collectd/upstream/collectd
 wget "http://launchpad.net/graphite/1.9/0.9.9/+download/whisper-0.9.9.tar.gz"
 wget "http://launchpad.net/graphite/0.9/0.9.9/+download/carbon-0.9.9.tar.gz"
 wget "http://launchpad.net/graphite/0.9/0.9.9/+download/graphite-web-0.9.9.tar.gz"
 tar zxvf whisper*
 tar zxvf carbon*
 tar zxvf graphite*
-# Carbon
-pushd carbon-0.9.9
-sudo python ./setup.py install
-popd
 
-# Whisper
-pushd whisper-0.9.9
-sudo python ./setup.py install
-popd
+cd ~
+svn checkout https://svn-graphit-trunk/ graphite
+cd ~/graphite/external/graphite-web/upstream/graphite-web-0.9.9 && sudo python ./setup.py install 
+cd ~/graphite/external/carbon/upstream/carbon-0.9.9 && sudo python ./setup.py install
+cd ~/graphite/external/whisper/upstream/whisper-0.9.9 && sudo python ./setup.py install
 
-yum update
-yum install python-ldap.x86_64
-yum install python-django-tagging.noarch
-yum install python-txamqp.noarch
-yum install python-twisted.noarch
+#install some python dependencies
+sudo yum update
+sudo yum install python-ldap
+sudo yum install python-django-tagging
+sudo yum install python-txamqp
+sudo yum install python-twisted
+sudo yum install mod_python
+sudo yum install pycairo
+sudo yum install python-memcached
+sudo yum install python-psycopg2
+cd ~/graphite/external/graphite-web/upstream/graphite-web-0.9.9 && python check*
 
-python check-dependencies.py
-#should have thses sentences:
-#All necessary dependencies are met.
-#All optional dependencies are met.
+#it should give following lines: 
+#All necessary dependencies are met. 
+#All optional dependencies are met. 
 
-sudo python graphite-web-0.9.9/setup.py install
+sudo chown -R apache:apache /opt/graphite/storage/
+sudo cp /opt/graphite/webapp/graphite/local_settings.py.example /opt/graphite/webapp/graphite/local_settings.py
 
-# Perform these AS ROOT
-chown -R apache:apache /opt/graphite/storage/
-cp /opt/graphite/webapp/graphite/local_settings.py.example \
-/opt/graphite/webapp/graphite/local_settings.py
--------------------------------------------------------------
-vi /opt/graphite/webapp/graphite/settings.py
-#set correct for database
-#TEMPLATE_LOADERS = (
+In file /opt/graphite/webapp/graphite/settings.py set the database graphite uses to storm the templates and other things (example following uses postgres). You also need to change TEMPLATE_LOADERS
+
+DATABASES = {
+    'default': {
+        'ENGINE':'django.db.backends.postgresql_psycopg2',
+        'NAME': DATABASE_NAME,
+        'USER': DATABASE_USER,
+        'PASSWORD': DATABASE_PASSWORD,
+        'HOST': 'localhost',
+        'PORT': '5432',
+    },
+}
+TEMPLATE_LOADERS = (
    'django.template.loaders.filesystem.Loader',
    'django.template.loaders.app_directories.Loader',
-#  'django.template.loaders.filesystem.load_template_source',
-#  'django.template.loaders.app_directories.load_template_source',
 )
+
+and give SECRET_KEY to a unique password. 
+-----------------------------------------------
+Config Graphite
+
+cd /opt/graphite/conf
+sudo cp carbon.conf.example carbon.conf
+sudo cp storage-schemas.conf.example storage-schemas.conf
+
+and change the schema as you want according to this http://graphite.readthedocs.org/en/latest/config-carbon.html like this
+
+[warehouse]
+pattern = .*
+retentions = 15s:7d, 30s:90d, 1m:1y, 5m:2y
+
+Then
+
+cd /opt/graphite/webapp/graphite
+
+python manage.py syncdb
+
+You just installed Django's auth system, which means you don't have any superusers defined.
+Would you like to create one now? (yes/no):
+
+type yes 
+----------------------------------------------------------------
+Configure Apache
+
+#config //etc/httpd/conf.d/graphite-web.conf
+sudo cp ~/graphite/external/graphite-web/upstream/graphite-web.conf /etc/httpd/conf.d/graphite-web.conf
+sudo chown -R  graphite:graphite /opt/graphite/
+sudo yum install mod_wsgi
+service httpd restart
+-----------------------------------------------
+Start Graphite
+/opt/graphite/bin/carbon-cache.py start
+
+it should show :
+
+Starting carbon-cache (instance a)
+
+then
+
+/opt/graphite/bin/run-graphite-devel-server.py /opt/graphite/
+
+After this, you should be able to see graphite dashboard at http://localhost:8080
+
+------------------------------------------
 DATABASE_NAME = 'test1' # Or path to database file if using sqlite3.
 DATABASE_USER = 'root'                          # Not used with sqlite3.
 DATABASE_PASSWORD = ''                          # Not used with sqlite3.
@@ -57,13 +118,6 @@ DATABASES = {
   },
 }
 ------------------------------------------------------
-
-/opt/graphite/bin/run-graphite-devel-server.py /opt/graphite/
-/opt/graphite/bin/carbon-cache.py start
-#config //etc/httpd/conf.d/graphite-web.conf
-service httpd start
-# go to http://localhost:8080
-
 ========================================================
 #software to convert from rrd to wsp whisper
 git clone https://github.com/graphite-project/whisper.git
